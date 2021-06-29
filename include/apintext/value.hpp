@@ -20,11 +20,13 @@ template <uint32_t width, bool signedness> class Value {
       : repr { src_repr } {}
 
  public:
-  template <template <uint32_t, bool> typename Expr, uint32_t src_width,
-            bool src_signedness>
-  constexpr Value(Expr<src_width, src_signedness> expr)
+  /// Construct a value from an expression
+  template <typename Expr>
+  constexpr Value(Expr const & expr)
       : Value(expr.compute()) {}
 
+  /// Constructor from an integer literal, which should be converted 
+  /// to an expression before being assigned
   template <std::integral I>
   constexpr Value(I const & val):Value{toExpr(val)}{}
 };

@@ -10,15 +10,15 @@
 
 namespace apintext {
 
-template <uint32_t width, bool signedness> class ValueExpr {
+template <uint32_t width, bool signedness> class ConstantExpr {
  private:
   using repr_t = ap_repr<width, signedness>;
   repr_t repr;
 
  public:
-  constexpr ValueExpr(repr_t const & src_repr)
+  constexpr ConstantExpr(repr_t const & src_repr)
       : repr { src_repr } {}
-  constexpr repr_t compute() { return repr; }
+  constexpr repr_t compute() const { return repr; }
 };
 
 template <std::integral T> constexpr uint32_t getWidth() {
@@ -26,7 +26,7 @@ template <std::integral T> constexpr uint32_t getWidth() {
 }
 
 template <std::integral T>
-constexpr ValueExpr<getWidth<T>(), std::is_signed<T>::value>
+constexpr ConstantExpr<getWidth<T>(), std::is_signed<T>::value>
 toExpr(T const& value) {
   return { value };
 }
