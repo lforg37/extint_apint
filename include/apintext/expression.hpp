@@ -10,15 +10,34 @@
 
 namespace apintext {
 
-template <uint32_t width, bool signedness> class ConstantExpr {
- private:
-  using repr_t = ap_repr<width, signedness>;
-  repr_t repr;
+template <typename EType> class Expression;
+
+template <uint32_t w, bool s, template <uint32_t, bool> typename ExprType>
+class Expression<ExprType<w, s>> {
+  /// CRTP base class for expressions
+  constexpr static uint32_t width = w;
+  constexpr static bool signedness = s;
 
  public:
-  constexpr ConstantExpr(repr_t const & src_repr)
-      : repr { src_repr } {}
-  constexpr repr_t compute() const { return repr; }
+  using res_t = ap_repr<width, signedness>;
+  constexpr auto compute() const {
+    return reinterpret_cast<ExprType<w, s> const&>(*this).do_compute();
+  }
+};
+
+template<typename T> concept ExprType = std::is_base_of<Expression<T>, T>::value;
+
+template <uint32_t w, bool s>
+class ConstantExpr : public Expression<ConstantExpr<w, s>> {
+ private:
+    using res_t = typename Expression<ConstantExpr>::res_t;
+ public:
+  constexpr ConstantExpr(res_t const& src_repr)
+      : value { src_repr } {}
+  constexpr res_t do_compute() const { return value; };
+
+ private:
+  const res_t value;
 };
 
 template <std::integral T> constexpr uint32_t getWidth() {

@@ -7,22 +7,18 @@
 #include "expression.hpp"
 
 namespace apintext {
-template <uint32_t width, bool signedness>
-using ap_repr = typename std::conditional<signedness, signed _ExtInt(width),
-                                          unsigned _ExtInt(width)>::type;
 
-template <uint32_t width, bool signedness> class Value {
+template <uint32_t width, bool signedness> class Value : public Expression<Value<width, signedness>>{
  private:
-  using repr_t = ap_repr<width, signedness>;
-  repr_t repr;
+  using res_t = typename Expression<Value>::res_t;
+  res_t value;
 
-  constexpr Value(repr_t src_repr)
-      : repr { src_repr } {}
+  constexpr Value(res_t src_repr)
+      : value { src_repr } {}
 
  public:
   /// Construct a value from an expression
-  template <typename Expr>
-  constexpr Value(Expr const & expr)
+  constexpr Value(ExprType auto const & expr)
       : Value(expr.compute()) {}
 
   /// Constructor from an integer literal, which should be converted 
