@@ -28,19 +28,33 @@ target_include_directories(APExtInt
 )
 
 install(
-  DIRECTORY ${INCLUDE_ROOT}/ 
-  DESTINATION include/ap_ext_int 
-  FILES_MATCHING PATTERN "*.hpp"
-)
-install(
   TARGETS APExtInt  EXPORT APExtIntTargets
-  INCLUDES DESTINATION include
-) 
+)
+
+include(CMakePackageConfigHelpers)
+write_basic_package_version_file("APExtIntConfigVersion.cmake"
+                                 VERSION ${PROJECT_VERSION}
+                                 COMPATIBILITY SameMajorVersion)
+
+configure_package_config_file("${PROJECT_SOURCE_DIR}/cmake/APExtIntConfig.cmake.in"
+                              "${PROJECT_BINARY_DIR}/APExtIntConfig.cmake"
+                              INSTALL_DESTINATION lib/cmake/APExtInt
+                              )
+
 install(
   EXPORT APExtIntTargets
-  FILE APExtIntTargets.cmake
-  NAMESPACE APExtInt::
   DESTINATION lib/cmake/APExtInt
+  NAMESPACE APExtInt::
+  FILE APExtIntTargets.cmake
+)
+
+install(FILES "${PROJECT_BINARY_DIR}/APExtIntConfig.cmake"
+              "${PROJECT_BINARY_DIR}/APExtIntConfigVersion.cmake"
+        DESTINATION lib/cmake/APExtInt)
+
+install(
+  DIRECTORY ${INCLUDE_ROOT}/ 
+  DESTINATION include/
 )
 
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
