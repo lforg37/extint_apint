@@ -43,6 +43,16 @@ toExpr(T const& value) {
   return { value };
 }
 
+template <uint32_t w>
+constexpr ConstantExpr<w, false> toExpr(unsigned _ExtInt(w) const& value) {
+  return { value };
+}
+
+template <uint32_t w>
+constexpr ConstantExpr<w, true> toExpr(signed _ExtInt(w) const& value) {
+  return { value };
+}
+
 //*************** Arithmetic expression ***********************************//
 template <ExprType ET1, ExprType ET2>
 using ExprArithProp =
@@ -140,6 +150,57 @@ class ReinterpretSignExpr {
   }
 };
 
+template <uint32_t targetWidth, ExprType SourceType> class ZExtExpr {
+ public:
+  static_assert(targetWidth > SourceType::width,
+                "Attempt to perform zero extension with target width smaller "
+                "than source width.");
+  static constexpr uint32_t width = targetWidth;
+  static constexpr bool signedness = SourceType::signedness;
+
+ private:
+  SourceType const source;
+  using res_t = ap_repr<width, signedness>;
+
+ public:
+  constexpr ZExtExpr(SourceType const& src)
+      : source { src } {}
+  constexpr res_t compute() const {
+    return static_cast<res_t>(
+        static_cast<ap_repr<SourceType::width, false>>(source.compute()));
+  };
+};
+
+template <uint32_t targetWidth, ExprType ET>
+constexpr auto zeroExtendToWidth(ET const& source) {
+  return ZExtExpr<targetWidth, ET> { source };
+}
+
+template <uint32_t targetWidth, ExprType SourceType> class SignExtExpr {
+ public:
+  static_assert(targetWidth > SourceType::width,
+                "Attempt to perform sign extension with target width smaller "
+                "than source width.");
+  static constexpr uint32_t width = targetWidth;
+  static constexpr bool signedness = SourceType::signedness;
+
+ private:
+  SourceType const source;
+  using res_t = ap_repr<width, signedness>;
+
+ public:
+  constexpr SignExtExpr(SourceType const& src)
+      : source { src } {}
+  constexpr res_t compute() const {
+    return static_cast<res_t>(source.compute());
+  };
+};
+
+template <uint32_t targetWidth, ExprType ET>
+constexpr auto signExtendToWidth(ET const& source) {
+  return SignExtExpr<targetWidth, ET>(source);
+}
+
 //**************** Operation on bit vector ********************************//
 
 template <uint32_t highBit, uint32_t lowBit, ExprType SourceType>
@@ -164,6 +225,31 @@ class SliceExpr {
         static_cast<ap_repr<highBit + 1, false>>(source.compute()) >> lowBit);
   }
 };
+
+template <unsigned int bitIdx, ExprType ET> class GetBitExpr {
+ public:
+  static_assert(bitIdx < ET::width,
+                "Trying to access bit outside of input range");
+  static constexpr uint32_t width = 1;
+  static constexpr bool signedness = false;
+
+ private:
+  using res_t = ap_repr<width, signedness>;
+  using intermediate_t = ap_repr<bitIdx + 1, false>;
+  ET const source;
+
+ public:
+  constexpr GetBitExpr(ET const& src)
+      : source { src } {};
+  constexpr res_t compute() const {
+    constexpr intermediate_t mask = intermediate_t { 1 } << bitIdx;
+    return { (static_cast<intermediate_t>(source.compute()) & mask) != intermediate_t{0} };
+  }
+};
+
+template <uint32_t idx, ExprType ET> constexpr auto getBit(ET const& src) {
+  return GetBitExpr<idx, ET> { src };
+}
 
 } // namespace apintext
 

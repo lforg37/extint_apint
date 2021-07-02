@@ -14,6 +14,7 @@ int main() {
                 "ConstantExpr is not an expression");
   static_assert(!IsExpr<Dummy>::res,
                 "Dummy should not be considered an expression");
+  static_assert(IsExpr<ZExtExpr<32, ConstantExpr<1, false>>>::res, "ZExtExpr is not an expression");
   static_assert(IsExpr<
     ReinterpretSignExpr<
     true, 

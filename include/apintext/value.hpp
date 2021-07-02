@@ -6,38 +6,12 @@
 
 #include "aliases.hpp"
 #include "expression.hpp"
+#include "policies.hpp"
 
 namespace apintext {
 
-struct Truncation {
-  template <uint32_t targetWidth, ExprType ET>
-  static constexpr auto truncate(ET const& source) {
-    static_assert(ET::width > targetWidth,
-                  "Trying to truncate expression to a bigger target width.");
-    return SliceExpr<targetWidth - 1, 0, ET> { source };
-  }
-};
-
-struct ReinterpretSign {
-  template <ExprType ET> static constexpr auto handleSign(ET const& source) {
-    return ReinterpretSignExpr<!ET::signedness, ET>(source);
-  }
-};
-
-struct Forbid {
-  template <uint32_t targetWidth, ExprType ET>
-  static constexpr auto truncate(ET const& source) {
-    static_assert(ET::width > targetWidth,
-                  "Trying to truncate expression to a bigger target width.");
-    static_assert(ET::width < 0, "Trying to perform forbidden truncation");
-  }
-
-  template <ExprType ET> static constexpr auto handleSign(ET const& source) {
-    return ReinterpretSignExpr<!ET::signedness, ET>(source);
-  }
-};
-
-template <uint32_t w, bool s, typename TruncationPolicy = Truncation,
+template <uint32_t w, bool s, typename ExtensionPolicy = SignExtension,
+          typename TruncationPolicy = Truncation,
           typename WrongSignPolicy = ReinterpretSign>
 class Value {
  public:
@@ -48,10 +22,10 @@ class Value {
   using val_t = ap_repr<w, s>;
   val_t value;
 
+ public:
   constexpr Value(val_t src_repr)
       : value { src_repr } {}
 
- public:
   /// Construct a value from an expression with target signedness and width
   template <ExprType SrcType>
   constexpr Value(SrcType const& expr,
@@ -74,14 +48,38 @@ class Value {
                   typename std::enable_if<(SrcType::width > width)>::type* = 0)
       : Value { TruncationPolicy::template truncate<width>(expr) } {}
 
+  /// Construct a value from an expression which is too small
+  template <ExprType SrcType>
+  constexpr Value(SrcType const& expr,
+                  typename std::enable_if<((SrcType::width < width))>::type* = 0)
+      : Value { ExtensionPolicy::template extend<width>(expr) } {}
+
   /// Constructor from an integer literal, which should be converted
   /// to an expression before being assigned
   template <std::integral I>
   constexpr Value(I const& val)
       : Value { toExpr(val) } {}
 
+  template <uint32_t ws>
+  constexpr Value(unsigned _ExtInt(ws) const& val)
+      : Value { toExpr(val) } {}
+
+  template <uint32_t ws>
+  constexpr Value(signed _ExtInt(ws) const& val)
+      : Value { toExpr(val) } {}
+
   constexpr val_t compute() const { return value; }
 };
+
+template <std::integral IT, typename ExtensionPolicy = SignExtension,
+          typename TruncationPolicy = Truncation,
+          typename WrongSignPolicy = ReinterpretSign>
+constexpr IT getAs(ExprType auto const& expression) {
+  return static_cast<IT>(
+      Value<getWidth<IT>(), std::is_signed<IT>::value, ExtensionPolicy,
+            TruncationPolicy, WrongSignPolicy> { expression }
+          .compute());
+}
 
 } //  namespace apintext
 
