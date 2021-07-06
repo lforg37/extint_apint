@@ -9,6 +9,7 @@ class ArithmeticProp {
  private:
   static constexpr uint32_t _generalProdWidth = width1 + width2;
   static constexpr uint32_t _max = (width1 > width2) ? width1 : width2;
+  static constexpr uint32_t _min = (width1 > width2) ? width2 : width1;
   static constexpr bool _sameSignedness = (signedness1 == signedness2);
   static constexpr bool _oneIsOne = ((width1 == 1) || (width2 == 1));
   static constexpr bool _bothAreOne = ((width1 == 1) && (width2 == 1));
@@ -23,6 +24,10 @@ class ArithmeticProp {
       (_oneIsOne) ? _caseOneWidth : _generalProdWidth;
   static constexpr bool sumSigned = _oneSigned;
   static constexpr uint32_t sumWidth = _max + 1;
+  static constexpr uint32_t divWidth = (signedness2) ?  width1 + 1 : width1;
+  static constexpr bool divSigned = _oneSigned;
+  static constexpr uint32_t modWidth = (signedness1) ? _min + 1 : _min;
+  static constexpr bool modSigned = signedness1;
 };
 } // namespace apextint
 

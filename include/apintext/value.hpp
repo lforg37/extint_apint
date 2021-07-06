@@ -6,7 +6,6 @@
 
 #include "aliases.hpp"
 #include "expression.hpp"
-#include "policies.hpp"
 
 namespace apintext {
 
@@ -21,6 +20,7 @@ class Value {
  private:
   using val_t = ap_repr<w, s>;
   val_t value;
+  using adaptor = Adaptor<ExtensionPolicy, TruncationPolicy, WrongSignPolicy>;
 
  public:
   constexpr Value(val_t src_repr)
@@ -28,31 +28,8 @@ class Value {
 
   /// Construct a value from an expression with target signedness and width
   template <ExprType SrcType>
-  constexpr Value(SrcType const& expr,
-                  typename std::enable_if<SrcType::signedness == signedness &&
-                                          SrcType::width == width>::type* = 0)
-      : Value(expr.compute()) {}
-
-  /// Construct a value from an expression which has target width but inexact
-  /// signedness
-  template <ExprType SrcType>
-  constexpr Value(
-      SrcType const& expr,
-      typename std::enable_if<SrcType::width == width &&
-                              SrcType::signedness != signedness>::type* = 0)
-      : Value { WrongSignPolicy::handleSign(expr) } {}
-
-  /// Construct a value from an expression which is too wide
-  template <ExprType SrcType>
-  constexpr Value(SrcType const& expr,
-                  typename std::enable_if<(SrcType::width > width)>::type* = 0)
-      : Value { TruncationPolicy::template truncate<width>(expr) } {}
-
-  /// Construct a value from an expression which is too small
-  template <ExprType SrcType>
-  constexpr Value(SrcType const& expr,
-                  typename std::enable_if<((SrcType::width < width))>::type* = 0)
-      : Value { ExtensionPolicy::template extend<width>(expr) } {}
+  constexpr Value(SrcType const& expr)
+      : Value(adaptor::template adapt<width, signedness>(expr).compute()) {}
 
   /// Constructor from an integer literal, which should be converted
   /// to an expression before being assigned
@@ -69,6 +46,13 @@ class Value {
       : Value { toExpr(val) } {}
 
   constexpr val_t compute() const { return value; }
+
+  template<std::integral IT>
+  constexpr explicit operator IT() const {
+      return static_cast<IT>(
+          adaptor::template adapt<getWidth<IT>(), std::is_signed<IT>::value>(*this).compute()
+      );
+  }
 };
 
 template <std::integral IT, typename ExtensionPolicy = SignExtension,

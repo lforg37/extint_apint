@@ -1,3 +1,3 @@
-add_executable(arithmetic arithmetic.cpp conversion.cpp)
+add_executable(arithmetic arithmetic.cpp conversion.cpp logic.cpp)
 target_link_libraries(arithmetic PRIVATE APExtInt Boost::unit_test_framework)
 add_test(NAME arithmetic COMMAND arithmetic)

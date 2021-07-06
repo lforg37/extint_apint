@@ -20,3 +20,9 @@ BOOST_AUTO_TEST_CASE(Extension) {
   constexpr int s_s_ext = getAs<int, SignExtension>(s_m_one);
   static_assert(s_s_ext == -1, "Error with signed sign extension");
 }
+
+BOOST_AUTO_TEST_CASE(toInt) {
+    constexpr Value<1, true> m_one {1};
+    static_assert(static_cast<int>(m_one) == -1);
+    static_assert(static_cast<uint32_t>(m_one) == (uint32_t{0} - 1));
+}
