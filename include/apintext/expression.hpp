@@ -4,7 +4,9 @@
 #include <concepts>
 #include <cstdint>
 #include <limits>
+#include <tuple>
 #include <type_traits>
+#include <utility>
 
 #include "aliases.hpp"
 #include "arith_prop.hpp"
@@ -217,6 +219,53 @@ template <uint32_t bitIdx, ExprType ET> class GetBitExpr {
 
 template <uint32_t idx, ExprType ET> constexpr auto getBit(ET const& src) {
   return GetBitExpr<idx, ET> { src };
+}
+
+template <ExprType... ET> class ConcatenateExpr {
+ private:
+  using storage_t = std::tuple<ET const...>;
+  static constexpr std::size_t nbTypes = sizeof...(ET);
+
+  template <ExprType First, ExprType... Remainder>
+  static constexpr bool seqSignedness = First::signedness;
+
+  template <ExprType... ETypes>
+  static constexpr uint32_t seqWidth = (ETypes::width + ...);
+
+ public:
+  static constexpr uint32_t width = seqWidth<ET...>;
+  static constexpr bool signedness = seqSignedness<ET...>;
+
+ private:
+  using res_t = ap_repr<width, signedness>;
+  storage_t storage;
+
+  template <ExprType Head, ExprType... Remainder>
+  constexpr ap_repr<seqWidth<Head, Remainder...>, false> getSubConcat() const {
+    using res_t = ap_repr<seqWidth<Head, Remainder...>, false>;
+    if constexpr (sizeof...(Remainder) == 0) {
+      return static_cast<res_t>(std::get<nbTypes - 1>(storage).compute());
+    } else {
+      constexpr auto toShift = seqWidth<Remainder...>;
+      constexpr auto toGet = nbTypes - 1 - sizeof...(Remainder);
+      auto highBits = static_cast<res_t>(std::get<toGet>(storage).compute())
+                      << toShift;
+      auto lowBits = static_cast<res_t>(getSubConcat<Remainder...>());
+      return highBits | lowBits;
+    }
+  }
+
+ public:
+  constexpr ConcatenateExpr(ET const&... in)
+      : storage { in... } {}
+  constexpr res_t compute() const {
+    return static_cast<res_t>(getSubConcat<ET...>());
+  }
+};
+
+template <ExprType ...ET>
+constexpr ConcatenateExpr<ET...> concatenate(ET const & ...subexpr) {
+  return { subexpr... };
 }
 
 template <ExprType ET1, ExprType ET2, typename Operation>
@@ -582,14 +631,12 @@ template <ExprType ET1, ExprType ET2> class LeftShiftExpr {
       : lhs { lhsSrc }
       , rhs { rhsSrc } {}
 
-  constexpr res_t compute() const {
-      return lhs.compute() << rhs.compute();
-  }
+  constexpr res_t compute() const { return lhs.compute() << rhs.compute(); }
 };
 
-template<ExprType ET1, ExprType ET2>
-constexpr LeftShiftExpr<ET1, ET2> operator<<(ET1 const & lhs, ET2 const & rhs) {
-    return {lhs, rhs};
+template <ExprType ET1, ExprType ET2>
+constexpr LeftShiftExpr<ET1, ET2> operator<<(ET1 const& lhs, ET2 const& rhs) {
+  return { lhs, rhs };
 }
 
 template <ExprType ET1, ExprType ET2> class RightShiftExpr {
@@ -607,14 +654,12 @@ template <ExprType ET1, ExprType ET2> class RightShiftExpr {
       : lhs { lhsSrc }
       , rhs { rhsSrc } {}
 
-  constexpr res_t compute() const {
-      return lhs.compute() >> rhs.compute();
-  }
+  constexpr res_t compute() const { return lhs.compute() >> rhs.compute(); }
 };
 
-template<ExprType ET1, ExprType ET2>
-constexpr RightShiftExpr<ET1, ET2> operator>>(ET1 const & lhs, ET2 const & rhs) {
-    return {lhs, rhs};
+template <ExprType ET1, ExprType ET2>
+constexpr RightShiftExpr<ET1, ET2> operator>>(ET1 const& lhs, ET2 const& rhs) {
+  return { lhs, rhs };
 }
 
 template <ExprType ET1, ExprType ET2>

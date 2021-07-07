@@ -58,16 +58,26 @@ BOOST_AUTO_TEST_CASE(DynamicBitInvert) {
 }
 
 BOOST_AUTO_TEST_CASE(StaticReduction) {
-    constexpr Value<3, false> zero{0}, mixed{0b101}, fullOne{0b111};
-    static_assert(getAs<int>(orReduce(zero)) == 0);
-    static_assert(getAs<int>(orReduce(mixed)) == 1);
-    static_assert(getAs<int>(orReduce(fullOne)) == 1);
+  constexpr Value<3, false> zero { 0 }, mixed { 0b101 }, fullOne { 0b111 };
+  static_assert(getAs<int>(orReduce(zero)) == 0);
+  static_assert(getAs<int>(orReduce(mixed)) == 1);
+  static_assert(getAs<int>(orReduce(fullOne)) == 1);
 
-    static_assert(getAs<int>(norReduce(zero)) == 1);
-    static_assert(getAs<int>(norReduce(mixed)) == 0);
-    static_assert(getAs<int>(norReduce(fullOne)) == 0);
+  static_assert(getAs<int>(norReduce(zero)) == 1);
+  static_assert(getAs<int>(norReduce(mixed)) == 0);
+  static_assert(getAs<int>(norReduce(fullOne)) == 0);
 
-    static_assert(getAs<int>(andReduce(zero)) == 0);
-    static_assert(getAs<int>(andReduce(mixed)) == 0);
-    static_assert(getAs<int>(andReduce(fullOne)) == 1);
+  static_assert(getAs<int>(andReduce(zero)) == 0);
+  static_assert(getAs<int>(andReduce(mixed)) == 0);
+  static_assert(getAs<int>(andReduce(fullOne)) == 1);
 };
+
+BOOST_AUTO_TEST_CASE(StaticConcatenate) {
+  constexpr Value<16, false> h { 0xDEAD }, l { 0xBEEF };
+  constexpr auto res = getAs<uint32_t>(concatenate(h, l));
+  static_assert(res == 0xDEADBEEF);
+
+  constexpr Value<8, false> a { 0xDE }, b { 0xAD }, c{0xBE}, d{0xEF};
+  constexpr auto res2 = getAs<uint32_t>(concatenate(a, b, c, d));
+  static_assert(res2 == 0xDEADBEEF);
+}
