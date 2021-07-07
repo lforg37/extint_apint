@@ -567,6 +567,56 @@ template <ExprType ET1, ExprType ET2, bool sub> class ExprSumBase {
   }
 };
 
+template <ExprType ET1, ExprType ET2> class LeftShiftExpr {
+ public:
+  static constexpr uint32_t width = ET1::width;
+  static constexpr bool signedness = ET1::signedness;
+
+ private:
+  using res_t = ap_repr<width, signedness>;
+  ET1 const lhs;
+  ET2 const rhs;
+
+ public:
+  constexpr LeftShiftExpr(ET1 const& lhsSrc, ET2 const& rhsSrc)
+      : lhs { lhsSrc }
+      , rhs { rhsSrc } {}
+
+  constexpr res_t compute() const {
+      return lhs.compute() << rhs.compute();
+  }
+};
+
+template<ExprType ET1, ExprType ET2>
+constexpr LeftShiftExpr<ET1, ET2> operator<<(ET1 const & lhs, ET2 const & rhs) {
+    return {lhs, rhs};
+}
+
+template <ExprType ET1, ExprType ET2> class RightShiftExpr {
+ public:
+  static constexpr uint32_t width = ET1::width;
+  static constexpr bool signedness = ET1::signedness;
+
+ private:
+  using res_t = ap_repr<width, signedness>;
+  ET1 const lhs;
+  ET2 const rhs;
+
+ public:
+  constexpr RightShiftExpr(ET1 const& lhsSrc, ET2 const& rhsSrc)
+      : lhs { lhsSrc }
+      , rhs { rhsSrc } {}
+
+  constexpr res_t compute() const {
+      return lhs.compute() >> rhs.compute();
+  }
+};
+
+template<ExprType ET1, ExprType ET2>
+constexpr RightShiftExpr<ET1, ET2> operator>>(ET1 const & lhs, ET2 const & rhs) {
+    return {lhs, rhs};
+}
+
 template <ExprType ET1, ExprType ET2>
 using ExprSum = ExprSumBase<ET1, ET2, false>;
 

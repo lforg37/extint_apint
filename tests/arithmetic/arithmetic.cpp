@@ -306,6 +306,22 @@ BOOST_AUTO_TEST_CASE(StaticComparison) {
   static_assert((a == a));
 }
 
+BOOST_AUTO_TEST_CASE(StaticShifts) {
+    constexpr Value<4, false> twelve{12};
+    constexpr Value<1, false> one{1};
+    constexpr auto six = getAs<int>(twelve >> one);
+    constexpr auto eight = getAs<int>(twelve << one);
+    static_assert(six == 6);
+    static_assert(eight == 8);
+
+    constexpr Value<4, true> m_four{0b1100};
+    constexpr auto m_2 = getAs<int>(m_four >> one);
+    static_assert(m_2 == -2);
+
+    constexpr auto m_8 = getAs<int>(m_four << one);
+    static_assert(m_8 == -8);
+}
+
 template <uint32_t dividendWidth, bool dividendSignedness,
           uint32_t divisorWidth, bool divisorSignedness>
 bool testAllMod() {
