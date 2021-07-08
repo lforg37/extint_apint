@@ -55,6 +55,18 @@ class Value {
   }
 };
 
+template<std::uint32_t width>
+using ap_uint = Value<width, false>;
+
+template<std::uint32_t width>
+using ap_int = Value<width, true>;
+
+template<std::uint32_t width>
+using checked_ap_uint = Value<width, false, Forbid, Forbid, Forbid>;
+
+template<std::uint32_t width>
+using checked_ap_int = Value<width, true, Forbid, Forbid, Forbid>;
+
 template <std::integral IT, typename ExtensionPolicy = SignExtension,
           typename TruncationPolicy = Truncation,
           typename WrongSignPolicy = ReinterpretSign>

@@ -108,10 +108,10 @@ BOOST_AUTO_TEST_CASE(DynamicSums) {
 }
 
 template <uint32_t a, uint32_t b, uint32_t res> constexpr void check_sub_8() {
-  constexpr Value<8, signedness::Unsigned> x { a };
-  constexpr Value<8, signedness::Unsigned> y { b };
+  constexpr ap_uint<8> x { a };
+  constexpr ap_uint<8> y { b };
   constexpr unsigned _ExtInt(8) expected_res { res };
-  constexpr Value<8, signedness::Unsigned> sum = a - b;
+  constexpr ap_uint<8> sum = a - b;
   static_assert(sum.compute() == expected_res, "Unexpected sum result");
 }
 

@@ -6,8 +6,10 @@
 
 namespace apintext {
 
+// Signedness is represented as bool
 using Signedness = bool;
 namespace signedness {
+    // Some signedness aliases
     static constexpr Signedness Signed = true;
     static constexpr Signedness Unsigned = false;
 }
