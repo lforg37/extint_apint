@@ -10,6 +10,7 @@
 
 #include "aliases.hpp"
 #include "arith_prop.hpp"
+#include "static_math.hpp"
 
 namespace apintext {
 
@@ -26,11 +27,13 @@ template <ExprType E1, ExprType E2> struct TightOverset {
   static constexpr std::uint32_t maxWidth =
       (E1::width > E2::width) ? E1::width : E2::width;
   static constexpr bool sameSignedness = E1::signedness == E2::signedness;
-  static constexpr bool oneIsSigned = E1::signedness || E2::signedness;
+  static constexpr bool oneIsSigned = (E1::signedness == signedness::Signed) ||
+                                      (E2::signedness == signedness::Signed);
 
  public:
-  static constexpr bool signedness = oneIsSigned;
-  static constexpr std::uint32_t width = (sameSignedness) ? maxWidth : maxWidth + 1;
+  static constexpr Signedness signedness = static_cast<Signedness>(oneIsSigned);
+  static constexpr std::uint32_t width =
+      (sameSignedness) ? maxWidth : maxWidth + 1;
 };
 
 //****************** Adaptor **********************************//
@@ -38,10 +41,10 @@ template <ExprType E1, ExprType E2> struct TightOverset {
 template <typename ExtensionPolicy, typename TruncationPolicy,
           typename WrongSignPolicy>
 struct Adaptor {
-  template <std::uint32_t targetWidth, bool targetSignedness, ExprType ET>
+  template <std::uint32_t targetWidth, Signedness targetSignedness, ExprType ET>
   static constexpr auto adapt(ET const& source) {
     constexpr std::uint32_t sourceWidth = ET::width;
-    constexpr bool sourceSignedness = ET::signedness;
+    constexpr Signedness sourceSignedness = ET::signedness;
     if constexpr (targetWidth > sourceWidth) {
       return adapt<targetWidth, targetSignedness>(
           ExtensionPolicy::template extend<targetWidth>(source));
@@ -58,13 +61,13 @@ struct Adaptor {
 };
 
 //*************** Constant expression **************************************//
-template <std::uint32_t w, bool s> class ConstantExpr {
+template <std::uint32_t w, Signedness s> class ConstantExpr {
  private:
   using val_t = ap_repr<w, s>;
 
  public:
   static constexpr std::uint32_t width = w;
-  static constexpr bool signedness = s;
+  static constexpr Signedness signedness = s;
 
   constexpr ConstantExpr(val_t const& src_repr)
       : value { src_repr } {}
@@ -79,28 +82,31 @@ template <std::integral T> constexpr std::uint32_t getWidth() {
 }
 
 template <std::integral T>
-constexpr ConstantExpr<getWidth<T>(), std::is_signed<T>::value>
+constexpr ConstantExpr<getWidth<T>(),
+                       static_cast<Signedness>(std::is_signed<T>::value)>
 toExpr(T const& value) {
   return { value };
 }
 
 template <std::uint32_t w>
-constexpr ConstantExpr<w, false> toExpr(unsigned _ExtInt(w) const& value) {
+constexpr ConstantExpr<w, signedness::Unsigned> toExpr(unsigned _ExtInt(w)
+                                                           const& value) {
   return { value };
 }
 
 template <std::uint32_t w>
-constexpr ConstantExpr<w, true> toExpr(signed _ExtInt(w) const& value) {
+constexpr ConstantExpr<w, signedness::Signed> toExpr(signed _ExtInt(w)
+                                                         const& value) {
   return { value };
 }
 
-template <bool targetSignedness, ExprType SourceType>
+template <Signedness targetSignedness, ExprType SourceType>
 class ReinterpretSignExpr {
  public:
   static_assert(targetSignedness != SourceType::signedness,
                 "Attempt to insert useless ReinterpretSignExpr");
   static constexpr std::uint32_t width = SourceType::width;
-  static constexpr bool signedness = targetSignedness;
+  static constexpr Signedness signedness = targetSignedness;
 
  private:
   SourceType const source;
@@ -120,7 +126,7 @@ template <std::uint32_t targetWidth, ExprType SourceType> class ZExtExpr {
                 "Attempt to perform zero extension with target width smaller "
                 "than source width.");
   static constexpr std::uint32_t width = targetWidth;
-  static constexpr bool signedness = SourceType::signedness;
+  static constexpr Signedness signedness = SourceType::signedness;
 
  private:
   SourceType const source;
@@ -131,7 +137,8 @@ template <std::uint32_t targetWidth, ExprType SourceType> class ZExtExpr {
       : source { src } {}
   constexpr res_t compute() const {
     return static_cast<res_t>(
-        static_cast<ap_repr<SourceType::width, false>>(source.compute()));
+        static_cast<ap_repr<SourceType::width, signedness::Unsigned>>(
+            source.compute()));
   };
 };
 
@@ -146,7 +153,7 @@ template <std::uint32_t targetWidth, ExprType SourceType> class SignExtExpr {
                 "Attempt to perform sign extension with target width smaller "
                 "than source width.");
   static constexpr std::uint32_t width = targetWidth;
-  static constexpr bool signedness = SourceType::signedness;
+  static constexpr Signedness signedness = SourceType::signedness;
 
  private:
   SourceType const source;
@@ -175,7 +182,7 @@ class SliceExpr {
   static_assert(SourceType::width > highBit,
                 "Trying to slice out of input bounds");
   static constexpr std::uint32_t width = highBit - lowBit + 1;
-  static constexpr bool signedness = false;
+  static constexpr Signedness signedness = signedness::Unsigned;
 
  private:
   SourceType const source;
@@ -186,7 +193,9 @@ class SliceExpr {
       : source { sourceExpr } {}
   constexpr res_t compute() const {
     return static_cast<res_t>(
-        static_cast<ap_repr<highBit + 1, false>>(source.compute()) >> lowBit);
+        static_cast<ap_repr<highBit + 1, signedness::Unsigned>>(
+            source.compute()) >>
+        lowBit);
   }
 };
 
@@ -200,11 +209,11 @@ template <std::uint32_t bitIdx, ExprType ET> class GetBitExpr {
   static_assert(bitIdx < ET::width,
                 "Trying to access bit outside of input range");
   static constexpr std::uint32_t width = 1;
-  static constexpr bool signedness = false;
+  static constexpr Signedness signedness = signedness::Unsigned;
 
  private:
   using res_t = ap_repr<width, signedness>;
-  using intermediate_t = ap_repr<bitIdx + 1, false>;
+  using intermediate_t = ap_repr<bitIdx + 1, signedness::Unsigned>;
   ET const source;
 
  public:
@@ -227,22 +236,23 @@ template <ExprType... ET> class ConcatenateExpr {
   static constexpr std::size_t nbTypes = sizeof...(ET);
 
   template <ExprType First, ExprType... Remainder>
-  static constexpr bool seqSignedness = First::signedness;
+  static constexpr Signedness seqSignedness = First::signedness;
 
   template <ExprType... ETypes>
   static constexpr std::uint32_t seqWidth = (ETypes::width + ...);
 
  public:
   static constexpr std::uint32_t width = seqWidth<ET...>;
-  static constexpr bool signedness = seqSignedness<ET...>;
+  static constexpr Signedness signedness = seqSignedness<ET...>;
 
  private:
   using res_t = ap_repr<width, signedness>;
   storage_t storage;
 
   template <ExprType Head, ExprType... Remainder>
-  constexpr ap_repr<seqWidth<Head, Remainder...>, false> getSubConcat() const {
-    using res_t = ap_repr<seqWidth<Head, Remainder...>, false>;
+  constexpr ap_repr<seqWidth<Head, Remainder...>, signedness::Unsigned>
+  getSubConcat() const {
+    using res_t = ap_repr<seqWidth<Head, Remainder...>, signedness::Unsigned>;
     if constexpr (sizeof...(Remainder) == 0) {
       return static_cast<res_t>(std::get<nbTypes - 1>(storage).compute());
     } else {
@@ -263,8 +273,8 @@ template <ExprType... ET> class ConcatenateExpr {
   }
 };
 
-template <ExprType ...ET>
-constexpr ConcatenateExpr<ET...> concatenate(ET const & ...subexpr) {
+template <ExprType... ET>
+constexpr ConcatenateExpr<ET...> concatenate(ET const&... subexpr) {
   return { subexpr... };
 }
 
@@ -272,7 +282,7 @@ template <ExprType ET1, ExprType ET2, typename Operation>
 class BitwiseLogicExpr {
  public:
   static constexpr std::uint32_t width = ET1::width;
-  static constexpr bool signedness = false;
+  static constexpr Signedness signedness = signedness::Unsigned;
 
  private:
   using res_t = ap_repr<width, signedness>;
@@ -297,8 +307,8 @@ struct BitwiseAND {
         "Trying to perform bitwise AND on operands of different widths.");
   }
   template <ExprType ET1, ExprType ET2>
-  static constexpr ap_repr<ET1::width, false> compute(ET1 const& left,
-                                                      ET2 const& right) {
+  static constexpr ap_repr<ET1::width, signedness::Unsigned>
+  compute(ET1 const& left, ET2 const& right) {
     check<ET1, ET2>();
     return { left.compute() & right.compute() };
   }
@@ -314,8 +324,8 @@ struct BitwiseOR {
         "Trying to perform bitwise OR on operands of different widths.");
   }
   template <ExprType ET1, ExprType ET2>
-  static constexpr ap_repr<ET1::width, false> compute(ET1 const& left,
-                                                      ET2 const& right) {
+  static constexpr ap_repr<ET1::width, signedness::Unsigned>
+  compute(ET1 const& left, ET2 const& right) {
     check<ET1, ET2>();
     return { left.compute() | right.compute() };
   }
@@ -331,8 +341,8 @@ struct BitwiseXOR {
         "Trying to perform bitwise XOR on operands of different widths.");
   }
   template <ExprType ET1, ExprType ET2>
-  static constexpr ap_repr<ET1::width, false> compute(ET1 const& left,
-                                                      ET2 const& right) {
+  static constexpr ap_repr<ET1::width, signedness::Unsigned>
+  compute(ET1 const& left, ET2 const& right) {
     check<ET1, ET2>();
     return { left.compute() ^ right.compute() };
   }
@@ -359,7 +369,7 @@ constexpr auto operator^(ET1 const& left, ET2 const& right) {
 template <ExprType ET> class BitInvertExpr {
  public:
   static constexpr std::uint32_t width = ET::width;
-  static constexpr bool signedness = false;
+  static constexpr Signedness signedness = signedness::Unsigned;
 
  private:
   using res_t = ap_repr<width, signedness>;
@@ -379,7 +389,7 @@ template <ExprType ET> constexpr auto operator~(ET const& src) {
 template <ExprType ET, typename Reduction> class ReductionExpr {
  public:
   static constexpr std::uint32_t width = 1;
-  static constexpr bool signedness = false;
+  static constexpr Signedness signedness = signedness::Unsigned;
 
  private:
   using res_t = ap_repr<width, signedness>;
@@ -393,15 +403,46 @@ template <ExprType ET, typename Reduction> class ReductionExpr {
 
 struct ORReduction {
   template <ExprType ET>
-  static constexpr ap_repr<1, false> compute(ET const& src) {
+  static constexpr ap_repr<1, signedness::Unsigned> compute(ET const& src) {
     constexpr res_t<ET> zero { 0 };
     return { src.compute() != zero };
   }
 };
 
+struct XORReduction {
+ private:
+  template <size_t width>
+  static constexpr auto
+  performXor(ap_repr<width, signedness::Unsigned> const& in) {
+    if constexpr (width == 1) {
+      return in;
+    } else {
+      constexpr auto log = log2<width>();
+      constexpr auto pow = std::uint32_t { 1 } << log;
+      auto low = static_cast<ap_repr<(pow / 2), signedness::Unsigned>>(in);
+      auto high = static_cast<ap_repr<width - (pow / 2), signedness::Unsigned>>(
+          in >> (pow / 2));
+      if constexpr (pow == width) {
+        ap_repr<pow / 2, signedness::Unsigned> reduced = high ^ low;
+        return performXor<pow/2>(reduced);
+      } else {
+        return performXor<width-(pow/2)>(high) ^ performXor<pow/2>(low);
+      }
+    }
+  }
+
+ public:
+  template <ExprType ET>
+  static constexpr ap_repr<1, signedness::Unsigned> compute(ET const& src) {
+    return 
+    performXor<ET::width>(
+        static_cast<ap_repr<ET::width, ET::signedness>>(src.compute()));
+  }
+};
+
 struct ANDReduction {
   template <ExprType ET>
-  static constexpr ap_repr<1, false> compute(ET const& src) {
+  static constexpr ap_repr<1, signedness::Unsigned> compute(ET const& src) {
     constexpr res_t<ET> zero { 0 };
     constexpr res_t<ET> fullOne = ~zero;
     return { src.compute() == fullOne };
@@ -410,7 +451,7 @@ struct ANDReduction {
 
 struct NORReduction {
   template <ExprType ET>
-  static constexpr ap_repr<1, false> compute(ET const& src) {
+  static constexpr ap_repr<1, signedness::Unsigned> compute(ET const& src) {
     constexpr res_t<ET> zero { 0 };
     return { src.compute() == zero };
   }
@@ -418,12 +459,18 @@ struct NORReduction {
 
 template <ExprType ET> using ORReductionExpr = ReductionExpr<ET, ORReduction>;
 
+template <ExprType ET> using XORReductionExpr = ReductionExpr<ET, XORReduction>;
+
 template <ExprType ET> using NORReductionExpr = ReductionExpr<ET, NORReduction>;
 
 template <ExprType ET> using ANDReductionExpr = ReductionExpr<ET, ANDReduction>;
 
 template <ExprType ET> constexpr auto orReduce(ET const& source) {
   return ORReductionExpr<ET> { source };
+}
+
+template <ExprType ET> constexpr auto xorReduce(ET const& source) {
+  return XORReductionExpr<ET> { source };
 }
 
 template <ExprType ET> constexpr auto norReduce(ET const& source) {
@@ -445,7 +492,7 @@ struct Truncation {
 };
 
 struct ReinterpretSign {
-  template <bool targetSignedness, ExprType ET>
+  template <Signedness targetSignedness, ExprType ET>
   static constexpr auto setSignedness(ET const& source) {
     return ReinterpretSignExpr<targetSignedness, ET>(source);
   }
@@ -495,7 +542,7 @@ template <ExprType ET1, ExprType ET2> class ExprProd {
 
  public:
   static constexpr std::uint32_t width = prop::prodWidth;
-  static constexpr bool signedness = prop::prodSigned;
+  static constexpr Signedness signedness = prop::prodSignedness;
   using res_t = ap_repr<width, signedness>;
   ET1 const leftOp;
   ET2 const rightOp;
@@ -522,7 +569,7 @@ template <ExprType ET1, ExprType ET2> class ExprDiv {
 
  public:
   static constexpr std::uint32_t width = prop::divWidth;
-  static constexpr bool signedness = prop::divSigned;
+  static constexpr Signedness signedness = prop::divSignedness;
   using res_t = ap_repr<width, signedness>;
   ET1 const leftOp;
   ET2 const rightOp;
@@ -534,12 +581,13 @@ template <ExprType ET1, ExprType ET2> class ExprDiv {
 
   constexpr res_t compute() const {
     using tightOverset = TightOverset<ET1, ET2>;
-    constexpr bool bothSigned = ET1::signedness && ET2::signedness;
+   constexpr bool bothSigned = (ET1::signedness == signedness::Signed) &&
+                                (ET2::signedness == signedness::Signed);
     constexpr std::uint32_t toWidth =
         (bothSigned && (tightOverset::width == ET1::width))
             ? tightOverset::width + 1
             : tightOverset::width;
-    constexpr bool toSign = tightOverset::signedness;
+    constexpr Signedness toSign = tightOverset::signedness;
     using adaptor = Adaptor<SignExtension, Forbid, ReinterpretSign>;
     return static_cast<res_t>(
         adaptor::template adapt<toWidth, toSign>(leftOp).compute() /
@@ -557,7 +605,7 @@ template <ExprType ET1, ExprType ET2> class ExprMod {
 
  public:
   static constexpr std::uint32_t width = prop::modWidth;
-  static constexpr bool signedness = prop::modSigned;
+  static constexpr Signedness signedness = prop::modSignedness;
   using res_t = ap_repr<width, signedness>;
   ET1 const leftOp;
   ET2 const rightOp;
@@ -569,12 +617,13 @@ template <ExprType ET1, ExprType ET2> class ExprMod {
 
   constexpr res_t compute() const {
     using tightOverset = TightOverset<ET1, ET2>;
-    constexpr bool bothSigned = ET1::signedness && ET2::signedness;
+    constexpr bool bothSigned = (ET1::signedness == signedness::Signed) &&
+                                (ET2::signedness == signedness::Signed);
     constexpr std::uint32_t toWidth =
         (bothSigned && (tightOverset::width == ET1::width))
             ? tightOverset::width + 1
             : tightOverset::width;
-    constexpr bool toSign = tightOverset::signedness;
+    constexpr Signedness toSign = tightOverset::signedness;
 
     using adaptor = Adaptor<SignExtension, Forbid, ReinterpretSign>;
     return static_cast<res_t>(
@@ -594,7 +643,7 @@ template <ExprType ET1, ExprType ET2, bool sub> class ExprSumBase {
 
  public:
   static constexpr std::uint32_t width = prop::sumWidth;
-  static constexpr bool signedness = prop::sumSigned;
+  static constexpr Signedness signedness = prop::sumSignedness;
 
  private:
   using res_t = ap_repr<width, signedness>;
@@ -619,7 +668,7 @@ template <ExprType ET1, ExprType ET2, bool sub> class ExprSumBase {
 template <ExprType ET1, ExprType ET2> class LeftShiftExpr {
  public:
   static constexpr std::uint32_t width = ET1::width;
-  static constexpr bool signedness = ET1::signedness;
+  static constexpr Signedness signedness = ET1::signedness;
 
  private:
   using res_t = ap_repr<width, signedness>;
@@ -642,7 +691,7 @@ constexpr LeftShiftExpr<ET1, ET2> operator<<(ET1 const& lhs, ET2 const& rhs) {
 template <ExprType ET1, ExprType ET2> class RightShiftExpr {
  public:
   static constexpr std::uint32_t width = ET1::width;
-  static constexpr bool signedness = ET1::signedness;
+  static constexpr Signedness signedness = ET1::signedness;
 
  private:
   using res_t = ap_repr<width, signedness>;
@@ -684,7 +733,7 @@ template <ExprType ET1, ExprType ET2>
 constexpr auto operator<=>(ET1 const& lhs, ET2 const& rhs) {
   using tightOverset = TightOverset<ET1, ET2>;
   constexpr std::uint32_t toWidth = tightOverset::width;
-  constexpr bool toSign = tightOverset::signedness;
+  constexpr Signedness toSign = tightOverset::signedness;
   using adaptor = Adaptor<SignExtension, Forbid, ReinterpretSign>;
   return adaptor::template adapt<toWidth, toSign>(lhs).compute() <=>
          adaptor::template adapt<toWidth, toSign>(rhs).compute();
@@ -694,7 +743,7 @@ template <ExprType ET1, ExprType ET2>
 constexpr bool operator==(ET1 const& lhs, ET2 const& rhs) {
   using tightOverset = TightOverset<ET1, ET2>;
   constexpr std::uint32_t toWidth = tightOverset::width;
-  constexpr bool toSign = tightOverset::signedness;
+  constexpr Signedness toSign = tightOverset::signedness;
   using adaptor = Adaptor<SignExtension, Forbid, ReinterpretSign>;
   return adaptor::template adapt<toWidth, toSign>(lhs).compute() ==
          adaptor::template adapt<toWidth, toSign>(rhs).compute();

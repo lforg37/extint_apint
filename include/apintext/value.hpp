@@ -9,13 +9,13 @@
 
 namespace apintext {
 
-template <uint32_t w, bool s, typename ExtensionPolicy = SignExtension,
+template <uint32_t w, Signedness s, typename ExtensionPolicy = SignExtension,
           typename TruncationPolicy = Truncation,
           typename WrongSignPolicy = ReinterpretSign>
 class Value {
  public:
   static constexpr uint32_t width = w;
-  static constexpr bool signedness = s;
+  static constexpr Signedness signedness = s;
 
  private:
   using val_t = ap_repr<w, s>;
@@ -47,11 +47,11 @@ class Value {
 
   constexpr val_t compute() const { return value; }
 
-  template<std::integral IT>
-  constexpr explicit operator IT() const {
-      return static_cast<IT>(
-          adaptor::template adapt<getWidth<IT>(), std::is_signed<IT>::value>(*this).compute()
-      );
+  template <std::integral IT> constexpr explicit operator IT() const {
+    return static_cast<IT>(
+        adaptor::template adapt<getWidth<IT>(), Signedness{std::is_signed<IT>::value}>(
+            *this)
+            .compute());
   }
 };
 
@@ -60,8 +60,8 @@ template <std::integral IT, typename ExtensionPolicy = SignExtension,
           typename WrongSignPolicy = ReinterpretSign>
 constexpr IT getAs(ExprType auto const& expression) {
   return static_cast<IT>(
-      Value<getWidth<IT>(), std::is_signed<IT>::value, ExtensionPolicy,
-            TruncationPolicy, WrongSignPolicy> { expression }
+      Value<getWidth<IT>(), Signedness { std::is_signed<IT>::value },
+            ExtensionPolicy, TruncationPolicy, WrongSignPolicy> { expression }
           .compute());
 }
 

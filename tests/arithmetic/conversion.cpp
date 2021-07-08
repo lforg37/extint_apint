@@ -9,8 +9,8 @@ namespace utf = boost::unit_test;
 using namespace apintext;
 
 BOOST_AUTO_TEST_CASE(Extension) {
-  constexpr Value<1, false> us_one { ap_repr<1, false> { 1 } };
-  constexpr Value<1, true> s_m_one { ap_repr<1, true> { -1 } };
+  constexpr Value<1, signedness::Unsigned> us_one { ap_repr<1, signedness::Unsigned> { 1 } };
+  constexpr Value<1, signedness::Signed> s_m_one { ap_repr<1, signedness::Signed> { -1 } };
   constexpr int us_z_ext = getAs<int, ZeroExtension>(us_one);
   static_assert(us_z_ext == 1, "Error with unsigned zero extension");
   constexpr int s_z_ext = getAs<int, ZeroExtension>(s_m_one);
@@ -22,7 +22,7 @@ BOOST_AUTO_TEST_CASE(Extension) {
 }
 
 BOOST_AUTO_TEST_CASE(toInt) {
-    constexpr Value<1, true> m_one {1};
+    constexpr Value<1, signedness::Signed> m_one {1};
     static_assert(static_cast<int>(m_one) == -1);
     static_assert(static_cast<uint32_t>(m_one) == (uint32_t{0} - 1));
 }
