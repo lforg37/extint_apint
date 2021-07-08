@@ -14,13 +14,19 @@
 
 namespace apintext {
 
+/// An expression is a type which has width and signedness members
+/// and a compute() const method that returns an integer of the
+/// corresponding width and signedness
 template <typename T>
 concept ExprType = requires(T const& val) {
   { val.compute() } -> std::same_as<ap_repr<T::width, T::signedness>>;
 };
 
+/// Get the result type of the compute method for a given expression type
 template <ExprType ET> using res_t = ap_repr<ET::width, ET::signedness>;
 
+/// Compute the required width and signedness to be able to store all values
+/// from all expressions
 template <ExprType E1, ExprType E2> struct TightOverset {
  private:
   static constexpr bool widestIsE1 = E1::width == E2::width;
@@ -41,6 +47,9 @@ template <ExprType E1, ExprType E2> struct TightOverset {
 template <typename ExtensionPolicy, typename TruncationPolicy,
           typename WrongSignPolicy>
 struct Adaptor {
+
+  /// Create the expression tree to adapt the source expression to the target
+  /// width and signedness, according to policies.
   template <std::uint32_t targetWidth, Signedness targetSignedness, ExprType ET>
   static constexpr auto adapt(ET const& source) {
     constexpr std::uint32_t sourceWidth = ET::width;
@@ -199,6 +208,15 @@ class SliceExpr {
   }
 };
 
+/**
+ * @brief Slice the input
+ *
+ * @tparam highBit input msb to be included in the slice
+ * @tparam lowbit input lsb to be included in the slice
+ * @tparam ET source expression type
+ * @param source
+ * @return constexpr auto A SliceExpr representing the slice
+ */
 template <std::uint32_t highBit, std::uint32_t lowBit, ExprType ET>
 constexpr auto slice(ET const& source) {
   return SliceExpr<highBit, lowBit, ET> { source };
@@ -226,6 +244,14 @@ template <std::uint32_t bitIdx, ExprType ET> class GetBitExpr {
   }
 };
 
+/**
+ * @brief Get one bit of the source expression
+ *
+ * @tparam idx index of the bit to get
+ * @tparam ET source expression type
+ * @param src source expression
+ * @return a GetBitExpr that represents the output bit
+ */
 template <std::uint32_t idx, ExprType ET> constexpr auto getBit(ET const& src) {
   return GetBitExpr<idx, ET> { src };
 }
@@ -273,6 +299,13 @@ template <ExprType... ET> class ConcatenateExpr {
   }
 };
 
+/**
+ * @brief Concatenate all the input, from left to right
+ *
+ * @tparam ET source types
+ * @param subexpr sub expression to concatenate
+ * @return ConcatenateExpr representing the concatenation
+ */
 template <ExprType... ET>
 constexpr ConcatenateExpr<ET...> concatenate(ET const&... subexpr) {
   return { subexpr... };
@@ -424,9 +457,9 @@ struct XORReduction {
           in >> (pow / 2));
       if constexpr (pow == width) {
         ap_repr<pow / 2, signedness::Unsigned> reduced = high ^ low;
-        return performXor<pow/2>(reduced);
+        return performXor<pow / 2>(reduced);
       } else {
-        return performXor<width-(pow/2)>(high) ^ performXor<pow/2>(low);
+        return performXor<width - (pow / 2)>(high) ^ performXor<pow / 2>(low);
       }
     }
   }
@@ -434,8 +467,7 @@ struct XORReduction {
  public:
   template <ExprType ET>
   static constexpr ap_repr<1, signedness::Unsigned> compute(ET const& src) {
-    return 
-    performXor<ET::width>(
+    return performXor<ET::width>(
         static_cast<ap_repr<ET::width, ET::signedness>>(src.compute()));
   }
 };
@@ -449,11 +481,27 @@ struct ANDReduction {
   }
 };
 
+struct NANDReduction {
+  template <ExprType ET>
+  static constexpr ap_repr<1, signedness::Unsigned> compute(ET const& src) {
+    constexpr res_t<ET> zero { 0 };
+    constexpr res_t<ET> fullOne = ~zero;
+    return { src.compute() != fullOne };
+  }
+};
+
 struct NORReduction {
   template <ExprType ET>
   static constexpr ap_repr<1, signedness::Unsigned> compute(ET const& src) {
     constexpr res_t<ET> zero { 0 };
     return { src.compute() == zero };
+  }
+};
+
+struct XNORReduction {
+  template <ExprType ET>
+  static constexpr ap_repr<1, signedness::Unsigned> compute(ET const& src) {
+    return ~XORReduction::compute(src);
   }
 };
 
@@ -463,25 +511,85 @@ template <ExprType ET> using XORReductionExpr = ReductionExpr<ET, XORReduction>;
 
 template <ExprType ET> using NORReductionExpr = ReductionExpr<ET, NORReduction>;
 
+template <ExprType ET>
+using XNORReductionExpr = ReductionExpr<ET, XNORReduction>;
+
 template <ExprType ET> using ANDReductionExpr = ReductionExpr<ET, ANDReduction>;
 
+template <ExprType ET>
+using NANDReductionExpr = ReductionExpr<ET, NANDReduction>;
+
+/**
+ * @brief Return the or reduction of the bit vector
+ *
+ * @tparam ET source expression type
+ * @param source source expression
+ * @return An expression representing the reduction
+ */
 template <ExprType ET> constexpr auto orReduce(ET const& source) {
   return ORReductionExpr<ET> { source };
 }
 
+/**
+ * @brief Return the xor reduction of the bit vector
+ *
+ * @tparam ET source expression type
+ * @param source source expression
+ * @return An expression representing the reduction
+ */
 template <ExprType ET> constexpr auto xorReduce(ET const& source) {
   return XORReductionExpr<ET> { source };
 }
 
+/**
+ * @brief Return the xnor reduction of the bit vector
+ *
+ * @tparam ET source expression type
+ * @param source source expression
+ * @return An expression representing the reduction
+ */
+template <ExprType ET> constexpr auto xnorReduce(ET const& source) {
+  return XNORReductionExpr<ET> { source };
+}
+
+/**
+ * @brief Return the nor reduction of the bit vector
+ *
+ * @tparam ET source expression type
+ * @param source source expression
+ * @return An expression representing the reduction
+ */
 template <ExprType ET> constexpr auto norReduce(ET const& source) {
   return NORReductionExpr<ET> { source };
 }
 
+/**
+ * @brief Return the and reduction of the bit vector
+ *
+ * @tparam ET source expression type
+ * @param source source expression
+ * @return An expression representing the reduction
+ */
 template <ExprType ET> constexpr auto andReduce(ET const& source) {
   return ANDReductionExpr<ET> { source };
 }
 
+/**
+ * @brief Return the nand reduction of the bit vector
+ *
+ * @tparam ET source expression type
+ * @param source source expression
+ * @return An expression representing the reduction
+ */
+template <ExprType ET> constexpr auto nandReduce(ET const& source) {
+  return NANDReductionExpr<ET> { source };
+}
+
 //************* Policies *********************************************//
+
+/**
+ * @brief Truncate and discard extra high weight bits.
+ */
 struct Truncation {
   template <std::uint32_t targetWidth, ExprType ET>
   static constexpr auto truncate(ET const& source) {
@@ -491,6 +599,9 @@ struct Truncation {
   }
 };
 
+/**
+ * @brief Change signedness by reinterpreting the value
+ */
 struct ReinterpretSign {
   template <Signedness targetSignedness, ExprType ET>
   static constexpr auto setSignedness(ET const& source) {
@@ -498,6 +609,9 @@ struct ReinterpretSign {
   }
 };
 
+/**
+ * @brief Left pad numbers with zeros
+ */
 struct ZeroExtension {
   template <std::uint32_t targetWidth, ExprType ET>
   static constexpr auto extend(ET const& source) {
@@ -505,6 +619,9 @@ struct ZeroExtension {
   }
 };
 
+/**
+ * @brief Left pad number with original sign bit (or zero for unsigned numbers)
+ */
 struct SignExtension {
   template <std::uint32_t targetWidth, ExprType ET>
   static constexpr auto extend(ET const& source) {
@@ -512,6 +629,9 @@ struct SignExtension {
   }
 };
 
+/**
+ * @brief Used to forbid sign reinterpretation, padding or truncation.
+ */
 struct Forbid {
   template <std::uint32_t targetWidth, ExprType ET>
   static constexpr auto truncate(ET const& source) {
@@ -581,7 +701,7 @@ template <ExprType ET1, ExprType ET2> class ExprDiv {
 
   constexpr res_t compute() const {
     using tightOverset = TightOverset<ET1, ET2>;
-   constexpr bool bothSigned = (ET1::signedness == signedness::Signed) &&
+    constexpr bool bothSigned = (ET1::signedness == signedness::Signed) &&
                                 (ET2::signedness == signedness::Signed);
     constexpr std::uint32_t toWidth =
         (bothSigned && (tightOverset::width == ET1::width))
@@ -748,16 +868,6 @@ constexpr bool operator==(ET1 const& lhs, ET2 const& rhs) {
   return adaptor::template adapt<toWidth, toSign>(lhs).compute() ==
          adaptor::template adapt<toWidth, toSign>(rhs).compute();
 }
-/*
-template<ExprType Shifted, ExprType Shift, bool rightShift>
-class ShiftExpr {
-public:
-static constexpr std::uint32_t width = Shifted::width;
-static constexpr bool signedness = false;
-private:
-using res_t = ap_repr<width, signedness>;
-};*/
-
 } // namespace apintext
 
 #endif

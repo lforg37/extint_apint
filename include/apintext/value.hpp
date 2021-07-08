@@ -13,6 +13,11 @@ template <uint32_t w, Signedness s, typename ExtensionPolicy = SignExtension,
           typename TruncationPolicy = Truncation,
           typename WrongSignPolicy = ReinterpretSign>
 class Value {
+  /// Represents a stored value/expression results
+  /// Value forces a given integer width, and the parameter policy classes
+  /// tune how too wide, too narrow or of wrong signedness expressions are
+  /// converted to the given precision.
+
  public:
   static constexpr uint32_t width = w;
   static constexpr Signedness signedness = s;
@@ -49,22 +54,20 @@ class Value {
 
   template <std::integral IT> constexpr explicit operator IT() const {
     return static_cast<IT>(
-        adaptor::template adapt<getWidth<IT>(), Signedness{std::is_signed<IT>::value}>(
-            *this)
+        adaptor::template adapt<getWidth<IT>(),
+                                Signedness { std::is_signed<IT>::value }>(*this)
             .compute());
   }
 };
 
-template<std::uint32_t width>
-using ap_uint = Value<width, false>;
+template <std::uint32_t width> using ap_uint = Value<width, false>;
 
-template<std::uint32_t width>
-using ap_int = Value<width, true>;
+template <std::uint32_t width> using ap_int = Value<width, true>;
 
-template<std::uint32_t width>
+template <std::uint32_t width>
 using checked_ap_uint = Value<width, false, Forbid, Forbid, Forbid>;
 
-template<std::uint32_t width>
+template <std::uint32_t width>
 using checked_ap_int = Value<width, true, Forbid, Forbid, Forbid>;
 
 template <std::integral IT, typename ExtensionPolicy = SignExtension,
