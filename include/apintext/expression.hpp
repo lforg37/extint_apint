@@ -109,6 +109,142 @@ constexpr ConstantExpr<w, signedness::Signed> toExpr(signed _ExtInt(w)
   return { value };
 }
 
+template <char... Char> struct APVDispatcher {
+ private:
+  enum struct Radix : std::uint8_t { BIN = 2, OCT = 8, DEC = 10, HEX = 16 };
+
+  template <char...> struct DigitsHolder {};
+  template <Radix, char... RadixDigits> struct DigitSequence {};
+
+  template <Radix rdx, char... digits>
+  static constexpr std::uint32_t getBitWidth(DigitSequence<rdx, digits...>) {
+    std::uint32_t nbDigits = sizeof...(digits);
+    if constexpr (rdx == Radix::BIN) {
+      return nbDigits;
+    } else if constexpr (rdx == Radix::OCT) {
+      return 3 * nbDigits;
+    } else if constexpr (rdx == Radix::HEX) {
+      return 4 * nbDigits;
+    } else {
+      // Decimal : compute overestimation
+      std::uint32_t nbThousands = nbDigits / 3;
+      std::uint32_t roundedUpThousands =
+          (nbDigits % 3) ? nbThousands + 1 : nbThousands;
+      return roundedUpThousands * 10;
+    }
+  }
+
+  template <Radix rdx, char digit> static constexpr std::uint8_t getDigit() {
+    if constexpr (digit >= '0' && digit <= '9') {
+      constexpr uint8_t res = digit - '0';
+      static_assert(res < static_cast<std::uint8_t>(rdx),
+                    "Error in digit decoding");
+      return res;
+    } else if constexpr (digit >= 'a' && digit <= 'f') {
+      constexpr uint8_t res = 10 + digit - 'a';
+      static_assert(res < static_cast<std::uint8_t>(rdx),
+                    "Error in digit decoding");
+      return res;
+    }
+  }
+
+  template <Radix, char... RadixDigits> struct DigitCleaner;
+
+  template <char... Digits> struct DigitCleaner<Radix::DEC, Digits...> {
+    using digits = DigitSequence<Radix::DEC, Digits...>;
+  };
+
+  template <char... Digits> struct DigitCleaner<Radix::OCT, '0', Digits...> {
+    using digits = DigitSequence<Radix::OCT, Digits...>;
+  };
+
+  template <char... Digits>
+  struct DigitCleaner<Radix::HEX, '0', 'x', Digits...> {
+    using digits = DigitSequence<Radix::HEX, Digits...>;
+  };
+
+  template <char... Digits>
+  struct DigitCleaner<Radix::BIN, '0', 'b', Digits...> {
+    using digits = DigitSequence<Radix::BIN, Digits...>;
+  };
+
+  template <Radix, std::uint8_t... digits> struct DigitValues {};
+
+  template <Radix rdx, char... digits>
+  static constexpr auto getDigitValue(DigitSequence<rdx, digits...>) {
+    return DigitValues<rdx, getDigit<rdx, digits>()...> {};
+  }
+
+  template <char first, char... Next>
+  static constexpr Radix secondLevelRadix() {
+    if constexpr (first == 'b') {
+      return Radix::BIN;
+    } else if constexpr (first == 'x') {
+      return Radix::HEX;
+    } else {
+      return Radix::OCT;
+    }
+  }
+
+  template <char first, char... Next> static constexpr Radix firstLevelRadix() {
+    if constexpr (sizeof...(Next) == 0 || first != '0') {
+      return Radix::DEC;
+    } else {
+      return secondLevelRadix<Next...>();
+    }
+  }
+
+  static constexpr Radix radix = firstLevelRadix<Char...>();
+  using digits = typename DigitCleaner<radix, Char...>::digits;
+  static constexpr std::uint32_t internalwidth = getBitWidth<radix>(digits {});
+  using internal_repr = ap_repr<internalwidth, false>;
+
+  template <Radix rdx, std::uint8_t msDigit, std::uint8_t... remainingDigits>
+  static constexpr internal_repr
+  getValue(DigitValues<rdx, msDigit, remainingDigits...>, internal_repr const prev = {0}) {
+      internal_repr next;
+      internal_repr curDigit{msDigit};
+      if constexpr (rdx == Radix::BIN) {
+        next =   (prev << 1) | curDigit;    
+      } else if constexpr (rdx == Radix::OCT) {
+        next = (prev << 3) | curDigit;
+      } else if constexpr (rdx == Radix::HEX) {
+        next = (prev << 4) | curDigit;
+      } else { // Decimal case
+        next = prev*internal_repr{10} + curDigit;
+      }
+    if constexpr(sizeof...(remainingDigits) == 0) {
+        return next;
+    } else {
+        return getValue(DigitValues<rdx, remainingDigits...> {}, next);
+    }
+  }
+
+  template <internal_repr val>
+  static constexpr std::uint32_t getRealBitwidth() {
+    if constexpr (val <= internal_repr { 1 }) {
+      return 1;
+    } else {
+      return 1 + getRealBitwidth<(val >> 1)>();
+    }
+  }
+
+  static constexpr internal_repr internal_value =
+      getValue(getDigitValue(digits {}));
+
+ public:
+  static constexpr auto width = getRealBitwidth<internal_value>();
+  static constexpr auto value() {
+    return ConstantExpr<width, signedness::Unsigned> {
+      ap_repr<width, signedness::Unsigned> { internal_value }
+    };
+  }
+};
+
+template <char... Char> constexpr auto operator"" _apv() {
+  return APVDispatcher<Char...>::value();
+}
+
 template <Signedness targetSignedness, ExprType SourceType>
 class ReinterpretSignExpr {
  public:
