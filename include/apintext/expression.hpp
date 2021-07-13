@@ -1,6 +1,7 @@
 #ifndef EXPRESSION_HPP
 #define EXPRESSION_HPP
 
+#include <bit>
 #include <concepts>
 #include <cstdint>
 #include <limits>
@@ -10,7 +11,6 @@
 
 #include "aliases.hpp"
 #include "arith_prop.hpp"
-#include "static_math.hpp"
 
 namespace apintext {
 
@@ -52,8 +52,8 @@ struct Adaptor {
   /// width and signedness, according to policies.
   template <std::uint32_t targetWidth, Signedness targetSignedness, ExprType ET>
   static constexpr auto adapt(ET const& source) {
-    constexpr std::uint32_t sourceWidth = ET::width;
-    constexpr Signedness sourceSignedness = ET::signedness;
+    constexpr auto sourceWidth = ET::width;
+    constexpr auto sourceSignedness = ET::signedness;
     if constexpr (targetWidth > sourceWidth) {
       return adapt<targetWidth, targetSignedness>(
           ExtensionPolicy::template extend<targetWidth>(source));
@@ -111,7 +111,12 @@ constexpr ConstantExpr<w, signedness::Signed> toExpr(signed _ExtInt(w)
 
 template <char... Char> struct APVDispatcher {
  private:
-  enum struct Radix : std::uint8_t { BIN = 2, OCT = 8, DEC = 10, HEX = 16 };
+  enum struct Radix : std::uint8_t {
+    binary = 2,
+    octal = 8,
+    decimal = 10,
+    hexadecimal = 16
+  };
 
   template <char...> struct DigitsHolder {};
   template <Radix, char... RadixDigits> struct DigitSequence {};
@@ -119,11 +124,11 @@ template <char... Char> struct APVDispatcher {
   template <Radix rdx, char... digits>
   static constexpr std::uint32_t getBitWidth(DigitSequence<rdx, digits...>) {
     std::uint32_t nbDigits = sizeof...(digits);
-    if constexpr (rdx == Radix::BIN) {
+    if constexpr (rdx == Radix::binary) {
       return nbDigits;
-    } else if constexpr (rdx == Radix::OCT) {
+    } else if constexpr (rdx == Radix::octal) {
       return 3 * nbDigits;
-    } else if constexpr (rdx == Radix::HEX) {
+    } else if constexpr (rdx == Radix::hexadecimal) {
       return 4 * nbDigits;
     } else {
       // Decimal : compute overestimation
@@ -150,22 +155,22 @@ template <char... Char> struct APVDispatcher {
 
   template <Radix, char... RadixDigits> struct DigitCleaner;
 
-  template <char... Digits> struct DigitCleaner<Radix::DEC, Digits...> {
-    using digits = DigitSequence<Radix::DEC, Digits...>;
+  template <char... Digits> struct DigitCleaner<Radix::decimal, Digits...> {
+    using digits = DigitSequence<Radix::decimal, Digits...>;
   };
 
-  template <char... Digits> struct DigitCleaner<Radix::OCT, '0', Digits...> {
-    using digits = DigitSequence<Radix::OCT, Digits...>;
-  };
-
-  template <char... Digits>
-  struct DigitCleaner<Radix::HEX, '0', 'x', Digits...> {
-    using digits = DigitSequence<Radix::HEX, Digits...>;
+  template <char... Digits> struct DigitCleaner<Radix::octal, '0', Digits...> {
+    using digits = DigitSequence<Radix::octal, Digits...>;
   };
 
   template <char... Digits>
-  struct DigitCleaner<Radix::BIN, '0', 'b', Digits...> {
-    using digits = DigitSequence<Radix::BIN, Digits...>;
+  struct DigitCleaner<Radix::hexadecimal, '0', 'x', Digits...> {
+    using digits = DigitSequence<Radix::hexadecimal, Digits...>;
+  };
+
+  template <char... Digits>
+  struct DigitCleaner<Radix::binary, '0', 'b', Digits...> {
+    using digits = DigitSequence<Radix::binary, Digits...>;
   };
 
   template <Radix, std::uint8_t... digits> struct DigitValues {};
@@ -178,17 +183,17 @@ template <char... Char> struct APVDispatcher {
   template <char first, char... Next>
   static constexpr Radix secondLevelRadix() {
     if constexpr (first == 'b') {
-      return Radix::BIN;
+      return Radix::binary;
     } else if constexpr (first == 'x') {
-      return Radix::HEX;
+      return Radix::hexadecimal;
     } else {
-      return Radix::OCT;
+      return Radix::octal;
     }
   }
 
   template <char first, char... Next> static constexpr Radix firstLevelRadix() {
     if constexpr (sizeof...(Next) == 0 || first != '0') {
-      return Radix::DEC;
+      return Radix::decimal;
     } else {
       return secondLevelRadix<Next...>();
     }
@@ -201,22 +206,23 @@ template <char... Char> struct APVDispatcher {
 
   template <Radix rdx, std::uint8_t msDigit, std::uint8_t... remainingDigits>
   static constexpr internal_repr
-  getValue(DigitValues<rdx, msDigit, remainingDigits...>, internal_repr const prev = {0}) {
-      internal_repr next;
-      internal_repr curDigit{msDigit};
-      if constexpr (rdx == Radix::BIN) {
-        next =   (prev << 1) | curDigit;    
-      } else if constexpr (rdx == Radix::OCT) {
-        next = (prev << 3) | curDigit;
-      } else if constexpr (rdx == Radix::HEX) {
-        next = (prev << 4) | curDigit;
-      } else { // Decimal case
-        next = prev*internal_repr{10} + curDigit;
-      }
-    if constexpr(sizeof...(remainingDigits) == 0) {
-        return next;
+  getValue(DigitValues<rdx, msDigit, remainingDigits...>,
+           internal_repr const prev = { 0 }) {
+    internal_repr next;
+    internal_repr curDigit { msDigit };
+    if constexpr (rdx == Radix::binary) {
+      next = (prev << 1) | curDigit;
+    } else if constexpr (rdx == Radix::octal) {
+      next = (prev << 3) | curDigit;
+    } else if constexpr (rdx == Radix::hexadecimal) {
+      next = (prev << 4) | curDigit;
+    } else { // Decimal case
+      next = prev * internal_repr { 10 } + curDigit;
+    }
+    if constexpr (sizeof...(remainingDigits) == 0) {
+      return next;
     } else {
-        return getValue(DigitValues<rdx, remainingDigits...> {}, next);
+      return getValue(DigitValues<rdx, remainingDigits...> {}, next);
     }
   }
 
@@ -586,7 +592,7 @@ struct XORReduction {
     if constexpr (width == 1) {
       return in;
     } else {
-      constexpr auto log = log2<width>();
+      constexpr auto log = std::bit_width(width - 1);
       constexpr auto pow = std::uint32_t { 1 } << log;
       auto low = static_cast<ap_repr<(pow / 2), signedness::Unsigned>>(in);
       auto high = static_cast<ap_repr<width - (pow / 2), signedness::Unsigned>>(
