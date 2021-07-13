@@ -7,12 +7,10 @@
 #include "aliases.hpp"
 
 namespace apintext {
-template <std::uint32_t width1, std::uint32_t width2, Signedness s1,
-          Signedness s2>
+template <std::uint32_t width1, std::uint32_t width2, Signedness signedness1,
+          Signedness signedness2>
 class ArithmeticProp {
  private:
-  static constexpr bool signedness1 = static_cast<bool>(s1);
-  static constexpr bool signedness2 = static_cast<bool>(s2);
   static constexpr std::uint32_t _generalProdWidth = width1 + width2;
   static constexpr std::uint32_t _max = std::max(width1, width2);
   static constexpr std::uint32_t _min = std::min(width1, width2);
@@ -31,7 +29,7 @@ class ArithmeticProp {
   static constexpr std::uint32_t sumWidth = _max + 1;
   static constexpr Signedness divSignedness {_oneSigned};
   static constexpr std::uint32_t divWidth = signedness2 ? width1 + 1 : width1;
-  static constexpr Signedness modSignedness = s1;
+  static constexpr Signedness modSignedness = signedness1;
   static constexpr std::uint32_t modWidth = signedness1 ? _min + 1 : _min;
 };
 } // namespace apintext

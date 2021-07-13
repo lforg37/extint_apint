@@ -7,15 +7,21 @@
 namespace apintext {
 
 // Signedness is represented as bool
-using Signedness = bool;
+struct Signedness {
+  const bool signedness;
+  constexpr Signedness(bool s)
+      : signedness { s } {}
+  constexpr operator bool() const { return signedness; }
+};
 namespace signedness {
-    // Some signedness aliases
-    static constexpr Signedness Signed = true;
-    static constexpr Signedness Unsigned = false;
-}
+// Some signedness aliases
+static constexpr Signedness Signed { true };
+static constexpr Signedness Unsigned { false };
+} // namespace signedness
 
 template <std::uint32_t width, Signedness signedness>
-using ap_repr = typename std::conditional<static_cast<bool>(signedness), signed _ExtInt(width),
-                                          unsigned _ExtInt(width)>::type;
+using ap_repr =
+    typename std::conditional<static_cast<bool>(signedness), signed _ExtInt(width),
+                              unsigned _ExtInt(width)>::type;
 } // namespace apintext
 #endif
