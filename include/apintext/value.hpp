@@ -9,13 +9,18 @@
 
 namespace apintext {
 
-template <uint32_t w, bool s, typename ExtensionPolicy = SignExtension,
+template <uint32_t w, Signedness s, typename ExtensionPolicy = SignExtension,
           typename TruncationPolicy = Truncation,
           typename WrongSignPolicy = ReinterpretSign>
 class Value {
+  /// Represents a stored value/expression results
+  /// Value forces a given integer width, and the parameter policy classes
+  /// tune how too wide, too narrow or of wrong signedness expressions are
+  /// converted to the given precision.
+
  public:
   static constexpr uint32_t width = w;
-  static constexpr bool signedness = s;
+  static constexpr Signedness signedness = s;
 
  private:
   using val_t = ap_repr<w, s>;
@@ -47,21 +52,31 @@ class Value {
 
   constexpr val_t compute() const { return value; }
 
-  template<std::integral IT>
-  constexpr explicit operator IT() const {
-      return static_cast<IT>(
-          adaptor::template adapt<getWidth<IT>(), std::is_signed<IT>::value>(*this).compute()
-      );
+  template <std::integral IT> constexpr explicit operator IT() const {
+    return static_cast<IT>(
+        adaptor::template adapt<getWidth<IT>(),
+                                Signedness { std::is_signed<IT>::value }>(*this)
+            .compute());
   }
 };
+
+template <std::uint32_t width> using ap_uint = Value<width, false>;
+
+template <std::uint32_t width> using ap_int = Value<width, true>;
+
+template <std::uint32_t width>
+using checked_ap_uint = Value<width, false, Forbid, Forbid, Forbid>;
+
+template <std::uint32_t width>
+using checked_ap_int = Value<width, true, Forbid, Forbid, Forbid>;
 
 template <std::integral IT, typename ExtensionPolicy = SignExtension,
           typename TruncationPolicy = Truncation,
           typename WrongSignPolicy = ReinterpretSign>
 constexpr IT getAs(ExprType auto const& expression) {
   return static_cast<IT>(
-      Value<getWidth<IT>(), std::is_signed<IT>::value, ExtensionPolicy,
-            TruncationPolicy, WrongSignPolicy> { expression }
+      Value<getWidth<IT>(), Signedness { std::is_signed<IT>::value },
+            ExtensionPolicy, TruncationPolicy, WrongSignPolicy> { expression }
           .compute());
 }
 

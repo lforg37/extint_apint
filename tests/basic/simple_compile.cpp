@@ -10,20 +10,20 @@ template <ExprType ET> struct IsExpr<ET> { static constexpr bool res = true; };
 struct Dummy {};
 
 int main() {
-  static_assert(IsExpr<ConstantExpr<32, false>>::res,
+  static_assert(IsExpr<ConstantExpr<32, signedness::Unsigned>>::res,
                 "ConstantExpr is not an expression");
   static_assert(!IsExpr<Dummy>::res,
                 "Dummy should not be considered an expression");
-  static_assert(IsExpr<ZExtExpr<32, ConstantExpr<1, false>>>::res, "ZExtExpr is not an expression");
+  static_assert(IsExpr<ZExtExpr<32, ConstantExpr<1, signedness::Unsigned>>>::res, "ZExtExpr is not an expression");
   static_assert(IsExpr<
     ReinterpretSignExpr<
-    true, 
+    signedness::Signed, 
     SliceExpr<
         0, 0, ConstantExpr<
-            32, true>
+            32, signedness::Signed>
         >
     >>::res,
                 "ReinterpretSignExpr is not an expression");
-  Value<32, false> { uint32_t { 14 } };
+  Value<32, signedness::Unsigned> { uint32_t { 14 } };
   return 0;
 }
