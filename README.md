@@ -75,11 +75,20 @@ auto oneInt = toExpr(std::int32_t{1}); // Will result in a signed constant expre
 ### Arithmetic operations
 
 Usual arithmetic operation can be performed with usual operators between expressions.
+
+```c++
+auto mult(ap_uint<3> const & lhs, ap_uint<1> const & rhs) {
+    return lhs * rhs; // Will return a signed product expression of width 3
+}
+```
+
 The resulting expression has a width and signedness that is sufficient to store exactly the result of the operation (except for division and modulo by zero).
+ 
 
 ```c++
 auto mult(ap_uint<3> const & lhs, ap_int<1> const & rhs) {
     return lhs * rhs; // Will return a signed product expression of width 4
+                      // (one extra bit for the result sign bit)
 }
 ```
 
@@ -97,11 +106,11 @@ Logical reductions are provided through functions taking an expression as input.
 The returned expression has an unsigned result on one bit when evaluated, which is the result of 
 the application of the associated logical operator between all the input expression results bits.
 
-+ `orReduce(Expression const & E)` is true if at least one bit of the argument is set.
++ `orReduce(Expression const &)` is true if at least one bit of the argument is set.
 + `xorReduce(Expression const &)`  is true if the number of bits set in the argument is odd.
 + `xnorReduce(Expression const &)` is true if the number of bits set in the argument is even.
 + `norReduce(Expression const &)` is true if no input bit is set.
-+ `andReduce(Expression const &)` is true if all teh input bits are set.
++ `andReduce(Expression const &)` is true if all the input bits are set.
 + `nandReduce(Expression const &)` is true if at least one bit of the argument is unset.
 
 ### Shift operations
