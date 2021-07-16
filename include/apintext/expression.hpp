@@ -109,6 +109,13 @@ constexpr ConstantExpr<w, signedness::Signed> toExpr(signed _ExtInt(w)
   return { value };
 }
 
+/**
+ * @brief Used to generate tight constant expression from representation
+ * characters
+ *
+ * @tparam Char char that constitutes the representation of the constant to
+ * create
+ */
 template <char... Char> struct APVDispatcher {
  private:
   enum struct Radix : std::uint8_t {
@@ -592,16 +599,19 @@ struct XORReduction {
     if constexpr (width == 1) {
       return in;
     } else {
-      constexpr auto log = std::bit_width(width - 1);
-      constexpr auto pow = std::uint32_t { 1 } << log;
-      auto low = static_cast<ap_repr<(pow / 2), signedness::Unsigned>>(in);
-      auto high = static_cast<ap_repr<width - (pow / 2), signedness::Unsigned>>(
-          in >> (pow / 2));
-      if constexpr (pow == width) {
-        ap_repr<pow / 2, signedness::Unsigned> reduced = high ^ low;
-        return performXor<pow / 2>(reduced);
+      constexpr auto prev2pow = std::bit_floor(width);
+      if constexpr (prev2pow == width) {
+        using half_width_repr = ap_repr<width / 2, signedness::Unsigned>;
+        auto low = static_cast<half_width_repr>(in);
+        auto high = static_cast<half_width_repr>(in >> (width / 2));
+        half_width_repr reduced = high ^ low;
+        return performXor<prev2pow / 2>(reduced);
       } else {
-        return performXor<width - (pow / 2)>(high) ^ performXor<pow / 2>(low);
+        auto low = static_cast<ap_repr<prev2pow, signedness::Unsigned>>(in);
+        auto high =
+            static_cast<ap_repr<width - prev2pow, signedness::Unsigned>>(
+                in >> prev2pow);
+        return performXor<width - prev2pow>(high) ^ performXor<prev2pow>(low);
       }
     }
   }
